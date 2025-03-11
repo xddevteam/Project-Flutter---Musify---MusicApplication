@@ -1,61 +1,72 @@
 on: workflow_dispatch
-name: Test, Build and Release apk
+name: Test, Build and Release APK
+
 env:
   PROPERTIES_PATH: "./android/key.properties"
+
 jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    # Setup Java environment in order to build the Android app.
-    - uses: actions/setup-java@v3
-      with:
-        distribution: "zulu"
-        java-version: "12.x"
+      # Setup Java environment
+      - uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "17"  # Menggunakan Java 17 yang lebih kompatibel dengan Flutter
 
+      # Gradle cache untuk mempercepat build
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-    # Gradle cache for faster builds
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-    # Setup the flutter environment.
-    - uses: subosito/flutter-action@v2
-      with:
-        channel: "stable"
+      # Setup Flutter environment
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
 
-    # 
-    - run: |
-          echo keyPassword=\${{ secrets.KEY_STORE }} > ${{env.PROPERTIES_PATH}}
-          echo storePassword=\${{ secrets.KEY_PASSWORD }} >> ${{env.PROPERTIES_PATH}}
-          echo keyAlias=\${{ secrets.KEY_ALIAS }} >> ${{env.PROPERTIES_PATH}}
-    #
-    - run: echo "${{ secrets.KEYSTORE2 }}" | base64 --decode > android/app/key.jks
+      # Membuat file key.properties
+      - run: |
+          echo "keyPassword=${{ secrets.KEY_STORE }}" > ${{ env.PROPERTIES_PATH }}
+          echo "storePassword=${{ secrets.KEY_PASSWORD }}" >> ${{ env.PROPERTIES_PATH }}
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> ${{ env.PROPERTIES_PATH }}
 
-    # Get flutter dependencies.
-    - run: flutter pub get
-    # Check for any formatting issues in the code.
-    - run: flutter format --set-exit-if-changed .
-    # Statically analyze the Dart code for any errors.
-    - run: flutter analyze .
-    # Build arch apks.
-    - run: flutter build apk --release --split-per-abi
-    # Upload arm64 generated apk to the artifacts.
-    - uses: actions/upload-artifact@v3
-      with:
-        name: Musify_arm64-v8a.apk
-        path: build/app/outputs/apk/release/app-arm64-v8a-release.apk
-    # Build universal apk.
-    - run: flutter build apk --release
-    # Upload universal generated apk to the artifacts.
-    - uses: actions/upload-artifact@v3
-      with:
-        name: Musify.apk
-        path: build/app/outputs/apk/release/app-release.apk
+      # Dekode dan simpan file keystore
+      - run: |
+          mkdir -p android/app  # Pastikan folder ada
+          echo "${{ secrets.KEYSTORE2 }}" | base64 --decode > android/app/key.jks
+
+      # Install dependencies Flutter
+      - run: flutter pub get
+
+      # Periksa format kode
+      - run: flutter format --set-exit-if-changed .
+
+      # Analisis kode Dart
+      - run: flutter analyze .
+
+      # Build APK per arsitektur (split APK)
+      - run: flutter build apk --release --split-per-abi
+
+      # Upload APK arm64-v8a
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Musify_arm64-v8a.apk
+          path: build/app/outputs/apk/release/app-arm64-v8a-release.apk
+
+      # Build APK universal
+      - run: flutter build apk --release
+
+      # Upload APK universal
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Musify_universal.apk
+          path: build/app/outputs/apk/release/app-release.apk
